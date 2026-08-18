@@ -1,0 +1,71 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "transport-xr-grid: the meshing pen's input surface"
+abstract: >
+  A Godot 4.4 XR project holding the hand end of the meshing pen: a stroke
+  sketcher that builds an ArrayMesh, pinch and world-grab interaction, a GPU
+  trail that draws the stroke as it is made, a procedural infinite grid to
+  place it against, and the OpenXR action map that binds a controller to all
+  of it. On the hexagon it is a transport layer, because it terminates the
+  protocol a pair of hands speaks and triggers the interactor that turns a
+  closed stroke into geometry.
+authors:
+  - family-names: Lee
+    given-names: "K. S. Ernest (iFire)"
+    email: ernest.lee@chibifire.com
+    orcid: "https://orcid.org/0000-0003-4570-1436"
+  - alias: celyk
+license: MIT
+repository-code: "https://github.com/v-sekai-multiplayer-fabric/transport-xr-grid"
+keywords:
+  - godot
+  - openxr
+  - sketching
+  - user-generated-content
+
+references:
+
+  # ── What this is a fork of ───────────────────────────────────────────────────
+  - type: software
+    title: "V-Sekai.xr-grid"
+    authors:
+      - family-names: Lee
+        given-names: "K. S. Ernest (iFire)"
+      - alias: celyk
+    year: 2026
+    license: MIT
+    url: "https://github.com/V-Sekai/transport-xr-grid"
+    notes: >
+      Forked rather than read. This project may write to its own organisation and
+      not to V-Sekai's, and a mission whose whole content is that anyone can build
+      in world cannot keep the surface they build with somewhere it may only read.
+      The README stays upstream's; `Lib.mirrors/0` in infrastructure-logbook records
+      the parent.
+
+  # ── The engine it is a project for ───────────────────────────────────────────
+  - type: software
+    title: "Godot Engine"
+    authors:
+      - name: "Juan Linietsky, Ariel Manzur and the Godot contributors"
+    year: 2026
+    version: "4.4"
+    license: MIT
+    url: "https://godotengine.org"
+    notes: >
+      `project.godot` asks for 4.4 with Double Precision and Forward Plus. Double
+      precision is not incidental: a world players keep building into is one whose
+      coordinates get large, and single-precision jitter is what stops that being
+      true far from the origin.
+
+  # ── Standards the input surface speaks ───────────────────────────────────────
+  - type: software
+    title: "OpenXR"
+    authors:
+      - name: "The Khronos Group Inc."
+    year: 2026
+    license: Apache-2.0
+    url: "https://www.khronos.org/openxr/"
+    notes: >
+      `openxr_action_map.tres` binds the pinch, grab and draw actions. OpenXR is a
+      trademark of The Khronos Group Inc., and this project is not affiliated with
+      or endorsed by them.
