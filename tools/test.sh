@@ -8,13 +8,15 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT="${GODOT:-godot}"
 LOG="$(mktemp -d)"
+# GNU timeout: `timeout` on Linux, `gtimeout` (coreutils) on macOS.
+TO="$(command -v timeout || command -v gtimeout)"
 
 # The first run of a fresh clone must import (ELFs, scenes) before any script runs.
-timeout 300 "$GODOT" --headless --path "$ROOT" --import >"$LOG/import.log" 2>&1
+"$TO" 300 "$GODOT" --headless --path "$ROOT" --import >"$LOG/import.log" 2>&1
 
 fail=0
 for probe in tools/probe_load.gd; do
-	timeout 300 "$GODOT" --headless --path "$ROOT" --xr-mode off --script "$probe" >"$LOG/run.log" 2>&1
+	"$TO" 300 "$GODOT" --headless --path "$ROOT" --xr-mode off --script "$probe" >"$LOG/run.log" 2>&1
 	if grep -q "RESULT: PASS" "$LOG/run.log"; then
 		echo "PASS $probe"
 	else

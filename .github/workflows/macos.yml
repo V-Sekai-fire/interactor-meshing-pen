@@ -1,0 +1,96 @@
+# The Skateboard's simulator implementation on the macOS runner (Apple
+# Paravirtual device): OXRSys built from the org's fork is the OpenXR runtime
+# (per process, XR_RUNTIME_JSON), tools/replay_oxrsys.py is the hand, and
+# tools/gate_replay.gd checks the pen's strokes reach curvenet.elf and close the
+# skirt. godot-sandbox's macOS addon is built from the org fork plus the patch
+# interactor-dress-on carries (tools/godot-sandbox/).
+name: macos
+
+on:
+  push:
+  pull_request:
+
+env:
+  GODOT_VERSION: 4.7.2
+  OXRSYS_COMMIT: f413cfdc348609423a0013e4311ed83ef83b3446
+
+jobs:
+  replay:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: V-Sekai-fire/interactor-dress-on
+          path: build/dress-on
+          sparse-checkout: tools/godot-sandbox
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Toolchain
+        run: brew install coreutils ninja vulkan-headers vulkan-loader molten-vk
+      - name: Cache the macOS addon
+        id: addon
+        uses: actions/cache@v4
+        with:
+          path: build/godot-sandbox-macos
+          key: godot-sandbox-macos-${{ hashFiles('build/dress-on/tools/godot-sandbox/**') }}
+      - name: Build the addon (org fork + patches)
+        if: steps.addon.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          BASE=$(awk '/^commit:/ {print $2}' build/dress-on/tools/godot-sandbox/CITATION.cff)
+          git init -q build/gs
+          git -C build/gs remote add origin https://github.com/V-Sekai-fire/godot-sandbox.git
+          git -C build/gs fetch -q --depth 1 origin "$BASE"
+          git -C build/gs checkout -q FETCH_HEAD
+          git -C build/gs submodule update -q --init --recursive
+          git -C build/gs -c user.name=ci -c user.email=ci@localhost am -q --keep-cr "$PWD"/build/dress-on/tools/godot-sandbox/*.patch
+          python -m pip install -q scons==4.4.0
+          (cd build/gs && scons -j"$(sysctl -n hw.ncpu)" target=template_release platform=macos arch=universal precision=single)
+          mkdir -p build/godot-sandbox-macos
+          cp -R build/gs/bin/addons/godot_sandbox/bin/libgodot_riscv.macos.template_release.universal.framework build/godot-sandbox-macos/
+      - name: Cache OXRSys
+        id: oxrsys
+        uses: actions/cache@v4
+        with:
+          path: build/oxrsys/build/macos-arm64/runtime
+          key: oxrsys-macos-arm64-${{ env.OXRSYS_COMMIT }}
+      - name: Build OXRSys (runtime only)
+        if: steps.oxrsys.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          git init -q build/oxrsys
+          git -C build/oxrsys remote add origin https://github.com/V-Sekai-fire/oxrsys.git
+          git -C build/oxrsys fetch -q --depth 1 origin "$OXRSYS_COMMIT"
+          git -C build/oxrsys checkout -q FETCH_HEAD
+          cd build/oxrsys
+          cmake --preset macos-arm64 -DOXRSYS_BUILD_QT_FRONTENDS=OFF
+          cmake --build build/macos-arm64 --target oxrsys_runtime
+          ls build/macos-arm64/runtime
+      - name: Godot
+        run: |
+          cp -R build/godot-sandbox-macos/*.framework addons/godot_sandbox/bin/
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -oq godot.zip -d "$HOME/opt"
+          echo "GODOT=$HOME/opt/Godot.app/Contents/MacOS/Godot" >> "$GITHUB_ENV"
+      - name: Load test
+        run: GODOT="$GODOT" tools/test.sh
+      - name: Replay through OXRSys
+        run: |
+          set -e
+          export XR_RUNTIME_JSON="$PWD/build/oxrsys/build/macos-arm64/runtime/oxrsys-runtime.json"
+          mkdir -p out
+          python3 tools/replay_oxrsys.py "$PWD/out/plan.json" > out/replay.log 2>&1 &
+          gtimeout 900 "$GODOT" --path . --rendering-driver vulkan --xr-mode on --script tools/gate_replay.gd -- \
+            --plan="$PWD/out/plan.json" --out="$PWD/out/results.txt" --wallclock=600 > out/godot.log 2>&1 || true
+          cat out/replay.log
+          cat out/results.txt
+          grep -q "RESULT: PASS" out/results.txt
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-${{ github.sha }}
+          path: out/
