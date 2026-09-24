@@ -26,3 +26,4 @@ commandlinetools-linux-8092744_latest.zip
 jdk/
 
 cmdline-tools/
+__pycache__/
