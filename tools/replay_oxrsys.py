@@ -21,6 +21,7 @@ import sys
 import time
 
 TRACKING_PORT = 9945
+CONTROL_PORT = 9946
 HAND_JOINT_COUNT = 26
 FLAGS = 0x0004 | 0x0008  # left and right controller active
 BUTTON_MENU = 0x0010
@@ -31,6 +32,28 @@ HEAD = (0.0, 1.6, 0.0)
 LEFT = (-0.3, 1.0, -0.3)
 FMT = '<qI' + 'f' * (7 * 3) + 'I' + 'f' * (4 + 2 + 2 + 1 + 4 + 3 + 3 + HAND_JOINT_COUNT * 4 * 2)
 assert struct.calcsize(FMT) == 1008, struct.calcsize(FMT)
+
+# ClientConnect (common/protocol/include/oxrsys/protocol/Protocol.h): the
+# control-channel handshake OXRSys's StreamingServer requires before it wires
+# up the TrackingReceiver to InputManager (StreamingServer::HandleClientConnect
+# -> state_ = Connected). Without this, tracking packets on TRACKING_PORT are
+# received but never surfaced as controller poses, so gate_replay.gd's calib
+# phase spins until timeout even though packets are flowing.
+#   MessageType type (u8) = ClientConnect (0x02)
+#   u8 versionMajor=1, u8 versionMinor=0, u8 reserved=0
+#   u32 preferredCodec, u32 maxBitrateMbps, u32 refreshRateHz
+#   char deviceName[64]
+CLIENT_CONNECT_FMT = '<BBBBIII64s'
+assert struct.calcsize(CLIENT_CONNECT_FMT) == 80, struct.calcsize(CLIENT_CONNECT_FMT)
+MESSAGE_TYPE_CLIENT_CONNECT = 0x02
+
+
+def client_connect_packet():
+    device_name = b'gate_replay\x00'
+    return struct.pack(CLIENT_CONNECT_FMT,
+                        MESSAGE_TYPE_CLIENT_CONNECT, 1, 0, 0,
+                        0, 0, 90,
+                        device_name.ljust(64, b'\x00'))
 
 
 def packet(right, trigger=0.0, buttons=0):
@@ -59,6 +82,9 @@ def main():
     dt = 1.0 / a.hz
     sent = [0]
 
+    def send_client_connect():
+        sock.sendto(client_connect_packet(), (a.host, CONTROL_PORT))
+
     def send(right, n, trigger=0.0, buttons=0):
         for _ in range(n):
             sock.sendto(packet(right, trigger, buttons), (a.host, TRACKING_PORT))
@@ -67,10 +93,17 @@ def main():
 
     calib = (0.0, 1.2, -0.3)
     t0 = time.monotonic()
+    connect_interval = 1.0
+    last_connect = 0.0
+    send_client_connect()
     while not os.path.exists(a.plan):
         if time.monotonic() - t0 > a.wait:
             print('replay: no plan after %.0f s: FAIL' % a.wait)
             return 1
+        now = time.monotonic()
+        if now - last_connect >= connect_interval:
+            send_client_connect()
+            last_connect = now
         send(calib, 9)
     plan = json.load(open(a.plan))
     calib = tuple(plan['calib'])
