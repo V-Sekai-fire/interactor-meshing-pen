@@ -46,7 +46,8 @@ jobs:
             PRERELEASE=true; \
           fi
 
-          GIT_TAG="$( git describe --tags --abbrev=0 )"
+          # No tags yet: fall back to 0.0.1 instead of failing the step.
+          GIT_TAG="$( git describe --tags --abbrev=0 2>/dev/null || true )"
           GIT_TAG=${GIT_TAG:=0.0.1}
 
           echo "TAG_PUSH=${TAG_PUSH}" >> $GITHUB_OUTPUT
