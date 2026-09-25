@@ -1,0 +1,84 @@
+# The Skateboard's simulator implementation on a GitHub Linux runner (no GPU):
+# lavapipe (Mesa's CPU Vulkan) renders, OXRSys built from the org's fork is the
+# OpenXR runtime (per process, XR_RUNTIME_JSON), tools/replay_oxrsys.py is the
+# hand, and tools/gate_replay.gd checks the pen's strokes reach curvenet.elf and
+# close the skirt. The godot-sandbox Linux addon is the one committed under
+# addons/godot_sandbox/bin (tools/sync_dress_on.sh).
+name: linux
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+  OXRSYS_COMMIT: f413cfdc348609423a0013e4311ed83ef83b3446
+
+jobs:
+  replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Toolchain
+        run: |
+          sudo apt-get update -q
+          # X11 headers: the OpenXR SDK that OXRSys fetches configures its
+          # xlib presentation backend and refuses to without them.
+          sudo apt-get install -y -q --no-install-recommends ninja-build pkg-config xvfb \
+            mesa-vulkan-drivers libvulkan-dev libavcodec-dev libavutil-dev libswscale-dev \
+            libx11-dev libxcb1-dev
+      - name: Cache OXRSys
+        id: oxrsys
+        uses: actions/cache@v4
+        with:
+          path: build/oxrsys/build/linux-native/runtime
+          key: oxrsys-linux-native-${{ env.OXRSYS_COMMIT }}
+      - name: Build OXRSys (runtime only)
+        if: steps.oxrsys.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          git init -q build/oxrsys
+          git -C build/oxrsys remote add origin https://github.com/V-Sekai-fire/oxrsys.git
+          git -C build/oxrsys fetch -q --depth 1 origin "$OXRSYS_COMMIT"
+          git -C build/oxrsys checkout -q FETCH_HEAD
+          cd build/oxrsys
+          cmake --preset linux-native -DOXRSYS_BUILD_QT_FRONTENDS=OFF
+          cmake --build build/linux-native --target oxrsys_runtime
+          ls build/linux-native/runtime
+      - name: Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -oq godot.zip -d "$HOME/opt"
+          echo "GODOT=$HOME/opt/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Load test
+        run: GODOT="$GODOT" tools/test.sh
+      - name: Replay through OXRSys
+        run: |
+          set -e
+          export XR_RUNTIME_JSON="$PWD/build/oxrsys/build/linux-native/runtime/oxrsys-runtime.json"
+          export XDG_CONFIG_HOME="$PWD/tools/oxrsys-ci"
+          export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+          mkdir -p out
+          python3 tools/replay_oxrsys.py "$PWD/out/plan.json" > out/replay.log 2>&1 &
+          timeout 900 xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path . --rendering-driver vulkan --xr-mode on \
+            --script tools/gate_replay.gd -- --plan="$PWD/out/plan.json" --out="$PWD/out/results.txt" \
+            --wallclock=600 --render-scale=0.25 > out/godot.log 2>&1 || true
+          cat out/replay.log
+          cat out/results.txt
+          grep -q "RESULT: PASS" out/results.txt
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-linux-${{ github.sha }}
+          path: out/

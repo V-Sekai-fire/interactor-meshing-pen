@@ -26,3 +26,7 @@ commandlinetools-linux-8092744_latest.zip
 jdk/
 
 cmdline-tools/
+__pycache__/
+
+# Replay gate logs (tools/gate_replay.gd, CI uploads them as an artifact)
+/out/

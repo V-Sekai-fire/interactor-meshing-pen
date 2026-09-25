@@ -1,0 +1,97 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://main.gd" id="1_main"]
+[ext_resource type="Script" path="res://xr/xr_world.gd" id="2_world"]
+[ext_resource type="Script" path="res://xr/pen_bridge.gd" id="3_bridge"]
+[ext_resource type="Script" path="res://addons/procedural_3d_grid/core/hand.gd" id="4_hand"]
+[ext_resource type="Script" path="res://addons/procedural_3d_grid/core/simple_sketcher/sketch_tool.gd" id="5_tool"]
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_strokes"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_strokes"]
+vertex_color_use_as_albedo = true
+cull_mode = 2
+
+[sub_resource type="SphereMesh" id="Sphere_tip"]
+radius = 0.01
+height = 0.02
+
+[sub_resource type="PlaneMesh" id="Plane_floor"]
+size = Vector2(4, 4)
+
+[sub_resource type="StandardMaterial3D" id="Mat_floor"]
+albedo_color = Color(0.55, 0.57, 0.6, 1)
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.93, 0.94, 0.9, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+ambient_light_energy = 0.5
+
+[node name="Main" type="Node"]
+script = ExtResource("1_main")
+
+[node name="World" type="Node3D" parent="."]
+script = ExtResource("2_world")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="World"]
+environment = SubResource("Env")
+
+[node name="Sun" type="DirectionalLight3D" parent="World"]
+transform = Transform3D(0.866025, -0.25, 0.433013, 0, 0.866025, 0.5, -0.5, -0.433013, 0.75, 0, 3, 0)
+
+[node name="FlatCamera" type="Camera3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 0.994522, 0.104528, 0, -0.104528, 0.994522, 0, 1.05, 2.4)
+fov = 45.0
+
+[node name="XROrigin3D" type="XROrigin3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.2)
+
+[node name="XRCamera3D" type="XRCamera3D" parent="World/XROrigin3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="hand_left" type="XRController3D" parent="World/XROrigin3D"]
+tracker = &"left_hand"
+script = ExtResource("4_hand")
+
+[node name="SketchTool" type="Node3D" parent="World/XROrigin3D/hand_left"]
+script = ExtResource("5_tool")
+CANVAS = NodePath("../../../Body")
+color = Color(0.980392, 0.827451, 0.0745098, 1)
+
+[node name="Tip" type="MeshInstance3D" parent="World/XROrigin3D/hand_left"]
+mesh = SubResource("Sphere_tip")
+
+[node name="hand_right" type="XRController3D" parent="World/XROrigin3D"]
+tracker = &"right_hand"
+script = ExtResource("4_hand")
+
+[node name="SketchTool" type="Node3D" parent="World/XROrigin3D/hand_right"]
+script = ExtResource("5_tool")
+CANVAS = NodePath("../../../Body")
+color = Color(0.0745098, 0.101961, 0.643137, 1)
+
+[node name="Tip" type="MeshInstance3D" parent="World/XROrigin3D/hand_right"]
+mesh = SubResource("Sphere_tip")
+
+[node name="Floor" type="MeshInstance3D" parent="World"]
+mesh = SubResource("Plane_floor")
+surface_material_override/0 = SubResource("Mat_floor")
+
+[node name="Body" type="Node3D" parent="World"]
+
+[node name="strokes" type="MeshInstance3D" parent="World/Body"]
+material_override = SubResource("Mat_strokes")
+mesh = SubResource("ArrayMesh_strokes")
+
+[node name="BodyMesh" type="MeshInstance3D" parent="World/Body"]
+
+[node name="Garment" type="MeshInstance3D" parent="World/Body"]
+
+[node name="Joints" type="Node3D" parent="World/Body"]
+
+[node name="PenBridge" type="Node" parent="World"]
+script = ExtResource("3_bridge")
+tools = Array[NodePath]([NodePath("../XROrigin3D/hand_left/SketchTool"), NodePath("../XROrigin3D/hand_right/SketchTool")])
+body_path = NodePath("../Body")

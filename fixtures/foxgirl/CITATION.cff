@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: If you use these files, cite cloth-fit's garment-data they come from and the paper it accompanies.
+title: FoxGirl body, skeleton and LCL skirt, the Gate 8 fixtures (from cloth-fit's garment-data)
+abstract: >-
+  The files Gate 8 uses as its infer and rig fixtures (until infer.elf, Cuts
+  4b and 7, replaces them) and, with --allow-fixture=curvenet or
+  --force-fixture=curvenet, as the garment: from V-Sekai-fire/cloth-fit's
+  garment-data (vendored in this repo as vendor/cloth-fit by Cut 6):
+  assets/avatars/FoxGirl/avatar.obj -> avatar.obj,
+  assets/avatars/FoxGirl/skeleton.obj -> skeleton.obj,
+  assets/garments/LCL_Skirt_DressEvening_003/garment.obj -> garment.obj,
+  assets/garments/LCL_Skirt_DressEvening_003/skeleton.obj -> garment_skeleton.obj,
+  assets/garments/LCL_Skirt_DressEvening_003/no-fit.txt -> no-fit.txt (unchanged).
+  Local adaptations, all made by tools/fixtures/foxgirl_convert.py: Blender's
+  frame (+Z up) becomes Godot's, (x, y, z) -> (x, z, -y); every file is
+  scaled by 0.283917636 so the avatar is 1.7 m tall, then shifted by
+  y -= 0.281784847 so its lowest vertex is on y = 0 (one map for all five,
+  so the skirt stays consistent with its own skeleton); only v, f (position
+  index only) and l records are kept. fit_config.json is cut-6's
+  tools/native/foxgirl_oracle.json (the upstream foxgirl_skirt setup) with
+  the *_path keys removed. The skeletons are cloth-fit's 15-joint layout, which
+  util/skeleton15.gd maps any rig onto (identity for these two).
+  The .gdignore beside this directory keeps Godot's OBJ importer off these
+  files (it refuses the line-only skeletons); they are read as text by
+  util/obj_io.gd.
+authors:
+  - name: Zizhou Huang
+  - name: The PolyFEM contributors
+  - name: K. S. Ernest (iFire) Lee
+repository-code: https://github.com/V-Sekai-fire/cloth-fit
+commit: d2bd59a61d73048c2431bf25bfc7d125c7a8a37d
+license: MIT

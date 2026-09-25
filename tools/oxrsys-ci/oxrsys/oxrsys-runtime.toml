@@ -1,0 +1,19 @@
+# OXRSys settings for the CI replay (XDG_CONFIG_HOME=tools/oxrsys-ci on Linux).
+# Nobody watches the stream there, so it costs as little as OXRSys allows:
+# the smallest resolution scale, a low bitrate and the fastest encoder preset.
+[general]
+runtime_enabled = true
+
+[streaming]
+bitrate_mbps = 5
+resolution_scale = 0.25
+dynamic_resolution_min_scale = 0.25
+encoder_preset = "speed"
+foveated_encoding_preset = "off"
+passthrough_enabled = false
+
+[spatial]
+enabled = false
+
+[logging]
+file_logging = false

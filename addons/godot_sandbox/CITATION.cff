@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: If you use this addon, cite godot-sandbox.
+title: godot-sandbox (Godot addon, vendored binaries)
+abstract: >-
+  The godot_sandbox addon: the Sandbox node that runs RISC-V guest ELFs under
+  libriscv inside stock Godot, the only native code the loop needs. Vendored
+  as prebuilt GDExtension libraries with the addon's scripts and icons
+  (Gate 0E, commit bb149bf of this repo). The Linux x86_64 library was
+  replaced on 2026-09-23 with the build of V-Sekai-fire/godot-sandbox at
+  a45da9f (main after PR #4, whose Sandbox::handle_exception starts the C++
+  Docker container only when sandbox/toolchain/docker_enabled is true;
+  project.godot sets it false), taken from that repository's Actions run
+  35876410662 (the PR build, tree identical to a45da9f), artifact
+  godot-sandbox-linux-x86_64-single, sha256
+  fdf85871b6a93f161000cf66bfd84db683ac3c6137ad9760e0961fc7f8d3ea8e. It is
+  what the RunPod loop worker loads (Gate 0H). Replaced again on 2026-09-24
+  with a build of V-Sekai-fire/godot-sandbox b1118e5 (main, 2026-09-23) plus
+  the one commit of branch feat/bintr-emit
+  (tools/godot-sandbox/0001-bintr-emit.patch: GODOT_SANDBOX_BINTR_EMIT=<dir>
+  writes each program's native translation as C99), built with Ubuntu clang
+  18, CMake and Ninja, Release, RISCV_ASMJIT=OFF (no JIT; binary translation
+  lookup as before), sha256
+  711e7a1363a9fb5b12ebe4ef031564635acf9fab6064b48787ec416abe348648. The Windows libraries are the
+  ones vendored at Gate 0E; their source commit was not recorded then.
+authors:
+  - name: Alf-André Walla (fwsGonzo)
+  - name: V-Sekai-fire
+repository-code: https://github.com/V-Sekai-fire/godot-sandbox
+commit: a45da9fad0a2b1463c05f728823fc069e0f11bc0
+license: BSD-3-Clause
