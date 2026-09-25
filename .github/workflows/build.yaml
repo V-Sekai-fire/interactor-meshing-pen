@@ -10,7 +10,8 @@ on:
       - '**'
 
 env:
-  ITCH_IO_PUBLISH: 'true'
+  # itch.io upload is parked; set back to 'true' to resume.
+  ITCH_IO_PUBLISH: 'false'
   # Set ITCH_IO_API_KEY in Repository Secrets
 
 jobs:
@@ -50,17 +51,16 @@ jobs:
           GIT_TAG="$( git describe --tags --abbrev=0 2>/dev/null || true )"
           GIT_TAG=${GIT_TAG:=0.0.1}
 
-          # Dev-stage tags (v0.1.0-dev.1) are prereleases and never reach itch.io.
-          ITCH_IO_PUBLISH="${{ env.ITCH_IO_PUBLISH }}"
+          # Dev-stage tags (v0.1.0-dev.1) are prereleases.
           case "${GITHUB_REF_NAME}" in
-            *-dev.*) PRERELEASE=true; ITCH_IO_PUBLISH=false ;;
+            *-dev.*) PRERELEASE=true ;;
           esac
 
           echo "TAG_PUSH=${TAG_PUSH}" >> $GITHUB_OUTPUT
           echo "PRERELEASE=${PRERELEASE}" >> $GITHUB_OUTPUT
           echo "GIT_TAG=${GIT_TAG}" >> $GITHUB_OUTPUT
 
-          echo "ITCH_IO_PUBLISH=${ITCH_IO_PUBLISH}" >> $GITHUB_OUTPUT
+          echo "ITCH_IO_PUBLISH=${{ env.ITCH_IO_PUBLISH }}" >> $GITHUB_OUTPUT
           
       - name: Fetch docker action
         id: fetch-action
