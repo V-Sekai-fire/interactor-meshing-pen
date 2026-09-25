@@ -50,11 +50,17 @@ jobs:
           GIT_TAG="$( git describe --tags --abbrev=0 2>/dev/null || true )"
           GIT_TAG=${GIT_TAG:=0.0.1}
 
+          # Dev-stage tags (v0.1.0-dev.1) are prereleases and never reach itch.io.
+          ITCH_IO_PUBLISH="${{ env.ITCH_IO_PUBLISH }}"
+          case "${GITHUB_REF_NAME}" in
+            *-dev.*) PRERELEASE=true; ITCH_IO_PUBLISH=false ;;
+          esac
+
           echo "TAG_PUSH=${TAG_PUSH}" >> $GITHUB_OUTPUT
           echo "PRERELEASE=${PRERELEASE}" >> $GITHUB_OUTPUT
           echo "GIT_TAG=${GIT_TAG}" >> $GITHUB_OUTPUT
 
-          echo "ITCH_IO_PUBLISH=${{ env.ITCH_IO_PUBLISH }}" >> $GITHUB_OUTPUT
+          echo "ITCH_IO_PUBLISH=${ITCH_IO_PUBLISH}" >> $GITHUB_OUTPUT
           
       - name: Fetch docker action
         id: fetch-action
@@ -79,6 +85,11 @@ jobs:
         id: tag
         run: |
           TAG_NAME="$( echo "${{ steps.docker.outputs.VERSION_TAG }}" | cut -d '-' -f1 )"
+
+          # A dev-stage tag names its own release.
+          if [ ${{ steps.setenv.outputs.TAG_PUSH }} == "true" ] && [[ "${GITHUB_REF_NAME}" == *-dev.* ]]; then \
+            TAG_NAME="${GITHUB_REF_NAME}"; \
+          fi
 
           # Rolling release tag
           if [ ${{ steps.setenv.outputs.TAG_PUSH }} == "false" ]; then \
