@@ -11,8 +11,8 @@ config_version=5
 [application]
 
 config/name="xr-grid"
-run/main_scene="res://procedural_3d_grid_sample/scenes/main.tscn"
-config/features=PackedStringArray("4.4", "Double Precision", "Forward Plus")
+run/main_scene="res://xr_main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -25,7 +25,7 @@ window/vsync/vsync_mode=0
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/GPUTrail-main/plugin.cfg", "res://addons/vsk_version/plugin.cfg")
+enabled=PackedStringArray("res://addons/GPUTrail-main/plugin.cfg", "res://addons/vsk_version/plugin.cfg", "res://addons/godot_sandbox/plugin.cfg")
 
 [gui]
 
@@ -38,6 +38,13 @@ textures/vram_compression/import_etc2_astc=true
 anti_aliasing/screen_space_roughness_limiter/enabled=false
 anti_aliasing/quality/use_debanding=true
 mesh_lod/lod_change/threshold_pixels=0.2
+
+[sandbox]
+
+; As interactor-dress-on's project.godot: no Docker toolchain on a guest fault,
+; native translation off until bintr libraries ship.
+toolchain/docker_enabled=false
+binary_translation/enabled=false
 
 [xr]
 
