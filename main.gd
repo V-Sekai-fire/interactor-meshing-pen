@@ -9,6 +9,7 @@
 #   Fit       stages/fit_stage.gd        fit.elf (Cut 6)
 #   Infer     stages/infer_stage.gd      infer.elf (Cut 4b / 7); fixtures until then
 #   Ggml      stages/ggml_stage.gd       ggml_test.elf (Cut 3: ggml-rd, Gate 3), made on first use
+#   Usd       stages/usd_stage.gd        usd.elf (Cut U: a .usdz package -> mesh + material arrays)
 #   Pipeline  stages/pipeline.gd         the loop's state machine
 #
 # Every guest entry point keeps a no-argument wrapper here (rule 8), each a
@@ -22,6 +23,8 @@ const CurvenetStage := preload("res://stages/curvenet_stage.gd")
 const FitStage := preload("res://stages/fit_stage.gd")
 const InferStage := preload("res://stages/infer_stage.gd")
 const GgmlStage := preload("res://stages/ggml_stage.gd")
+const UsdStage := preload("res://stages/usd_stage.gd")
+const StrokesUsd := preload("res://util/strokes_usd.gd")
 const Pipeline := preload("res://stages/pipeline.gd")
 
 var dress_on = null
@@ -30,6 +33,7 @@ var curvenet = null
 var fit = null
 var infer = null
 var ggml = null
+var usd = null
 var pipeline = null
 
 func _ready() -> void:
@@ -39,8 +43,9 @@ func _ready() -> void:
 	fit = _add(FitStage, "Fit")
 	infer = _add(InferStage, "Infer")
 	ggml = _add(GgmlStage, "Ggml")
+	usd = _add(UsdStage, "Usd")
 	pipeline = _add(Pipeline, "Pipeline")
-	pipeline.setup({"infer": infer, "curvenet": curvenet, "fit": fit, "drape": drape})
+	pipeline.setup({"infer": infer, "curvenet": curvenet, "fit": fit, "drape": drape, "usd": usd})
 	var world = get_node_or_null("World")
 	if world != null and world.has_method("attach"):
 		world.attach(self)
@@ -67,6 +72,30 @@ func dress_on_run_drop_seam(allow_fixture: String = "infer,rig") -> String:
 # Gate 8's control: CHECK sees one garment vertex pushed inside the body.
 func dress_on_run_push_vertex(allow_fixture: String = "infer,rig") -> String:
 	return pipeline.start({"allow_fixture": allow_fixture, "push_vertex": true})
+
+# Save the strokes drawn in the last run (pen or scripted) as OpenUSD, one
+# BasisCurves per stroke (util/strokes_usd.gd); "" picks user://creations/<utc>.usda.
+func dress_on_save_strokes(path: String = "") -> String:
+	var strokes: Array = pipeline.data.get("authored", [])
+	if strokes.is_empty():
+		return "FAIL: no strokes drawn yet (state %s)" % pipeline.state
+	if path == "":
+		path = "user://creations/%s.usda" % Time.get_datetime_string_from_system(true).replace(":", "")
+	var r := StrokesUsd.to_usda(usd, strokes, {"source": "pen", "saved_at": Time.get_datetime_string_from_system(true)})
+	if r.has("error"):
+		return "FAIL: " + r.error
+	var g := ProjectSettings.globalize_path(path)
+	DirAccess.make_dir_recursive_absolute(g.get_base_dir())
+	var f := FileAccess.open(g, FileAccess.WRITE)
+	if f == null:
+		return "FAIL: cannot write %s (%s)" % [path, error_string(FileAccess.get_open_error())]
+	f.store_string(r.text)
+	f.close()
+	return "ok %d strokes -> %s" % [strokes.size(), path]
+
+# Run the loop on saved strokes instead of the scripted skirt.
+func dress_on_run_strokes(path: String = "res://../gates/S-strokes/inputs/skirt.usda") -> String:
+	return pipeline.start({"allow_fixture": "infer,rig", "strokes_from": path})
 
 func dress_on_run_opts(opts: Dictionary = {}) -> String:
 	return pipeline.start(opts)
@@ -356,6 +385,39 @@ func rw_stats() -> String: return dress_on.rw("rw_stats")
 func rw_close() -> String: return dress_on.rw("rw_close")
 func rw_spirv(name: String = "saxpby") -> String: return dress_on.rw("rw_spirv", [name]) # its size
 
+# --- Cut U: the usd stage (usd.elf) ----------------------------------------------------
+# One delegate per guest entry point (rule 8); big arrays answer as summary lines.
+
+func usd_init() -> String: return usd.usd_init()
+func usd_open(path: String = UsdStage.DEFAULT_PACKAGE) -> String: return usd.usd_open(path)
+func usd_push(path: String = UsdStage.DEFAULT_PACKAGE) -> String: return usd.usd_push(path)
+func usd_open_staged() -> String: return usd.usd_open_staged()
+func usd_blake3(path: String = UsdStage.DEFAULT_PACKAGE) -> String: return usd.usd_blake3(path)
+func usd_close() -> String: return usd.usd_close()
+func usd_curve_count() -> int: return usd.usd_curve_count()
+func usd_curve_info(i: int = 0) -> String: return usd.usd_curve_info(i)
+func usd_curve_points(i: int = 0) -> String: return usd.usd_curve_points(i)
+func usd_layer_data() -> String: return usd.usd_layer_data()
+func usd_write_curves() -> String: return usd.usd_write_curves()
+func usd_mesh_count() -> int: return usd.usd_mesh_count()
+func usd_material_count() -> int: return usd.usd_material_count()
+func usd_texture_count() -> int: return usd.usd_texture_count()
+func usd_mesh_info(i: int = 0) -> String: return usd.usd_mesh_info(i)
+func usd_mesh_points(i: int = 0) -> String: return usd.usd_mesh_points(i)
+func usd_mesh_points_slice(i: int = 0, from: int = 0, count_: int = 4) -> String: return usd.usd_mesh_points_slice(i, from, count_)
+func usd_mesh_normals(i: int = 0) -> String: return usd.usd_mesh_normals(i)
+func usd_mesh_normals_slice(i: int = 0, from: int = 0, count_: int = 4) -> String: return usd.usd_mesh_normals_slice(i, from, count_)
+func usd_mesh_uvs(i: int = 0) -> String: return usd.usd_mesh_uvs(i)
+func usd_mesh_uvs_slice(i: int = 0, from: int = 0, count_: int = 4) -> String: return usd.usd_mesh_uvs_slice(i, from, count_)
+func usd_mesh_indices(i: int = 0) -> String: return usd.usd_mesh_indices(i)
+func usd_mesh_indices_slice(i: int = 0, from: int = 0, count_: int = 4) -> String: return usd.usd_mesh_indices_slice(i, from, count_)
+func usd_mesh_transform(i: int = 0) -> String: return usd.usd_mesh_transform(i)
+func usd_material(i: int = 0) -> String: return usd.usd_material(i)
+func usd_texture_info(i: int = 0) -> String: return usd.usd_texture_info(i)
+func usd_texture(i: int = 0) -> String: return usd.usd_texture(i)
+func usd_texture_slice(i: int = 0, from: int = 0, count_: int = 16) -> String: return usd.usd_texture_slice(i, from, count_)
+func usd_scene() -> String: return usd.usd_scene()
+
 # --- Gate 0G: usd_probe.elf, OpenUSD reading a stage from bytes (gates/0g-openusd) ---
 # A probe, not a pipeline stage: its Sandbox is made on first use.
 const USD_SAMPLE := "res://../gates/0g-openusd/inputs/skel_quad.usda"
@@ -369,7 +431,7 @@ func _usd_call(fn: String, args: Array = []) -> String:
 		_usd_sb = r.sandbox
 	return str(_usd_sb.callv("vmcall", [fn] + args))
 
-func usd_init() -> String: return _usd_call("usd_init")
+func usd_probe_init() -> String: return _usd_call("usd_init")
 # path_mode 0: USDA through SdfLayer::ImportFromString; 1: the in-memory resolver.
 func usd_load(path: String = USD_SAMPLE, path_mode: int = 0) -> String:
 	var bytes := FileAccess.get_file_as_bytes(ProjectSettings.globalize_path(path))

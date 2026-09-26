@@ -18,5 +18,15 @@ func _initialize() -> void:
 		print("curvenet.elf: ", fns.size(), " functions")
 		ok = ok and fns.size() > 0
 		s.free()
+		# usd.elf is a large OpenUSD guest; load it through its stage so the
+		# memory/references/timeout setup is right (a bare Sandbox traps).
+		var UsdStage = load("res://stages/usd_stage.gd")
+		var stage = UsdStage.new()
+		root.add_child(stage)
+		stage.ensure()
+		var uok: bool = stage.sandbox != null and stage.sandbox.get_functions().size() > 0
+		print("usd.elf: ", "loaded, %d functions" % stage.sandbox.get_functions().size() if uok else "FAIL " + str(stage.reason))
+		ok = ok and uok
+		stage.free()
 	print("RESULT: ", "PASS" if ok else "FAIL")
 	quit(0 if ok else 1)

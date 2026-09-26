@@ -16,7 +16,7 @@ SRC="${1:?usage: tools/sync_dress_on.sh <interactor-dress-on checkout>}/project"
 DST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 [ -f "$SRC/main.gd" ] || { echo "sync_dress_on: no $SRC/main.gd"; exit 1; }
 
-ELFS="curvenet.elf fit.elf drape.elf dress_on.elf rd_worker.elf"
+ELFS="curvenet.elf fit.elf drape.elf dress_on.elf rd_worker.elf usd.elf"
 FILES="main.gd infer_host.gd graph_dump.gd xr_main.tscn"
 DIRS="xr stages util fixtures addons/godot_sandbox"
 
