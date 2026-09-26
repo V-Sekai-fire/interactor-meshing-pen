@@ -37,6 +37,7 @@ const PenSource := preload("res://xr/pen_source_scripted.gd")
 const MeshTopo := preload("res://util/mesh_topo.gd")
 const MeshWire := preload("res://util/mesh_wire.gd")
 const ObjIO := preload("res://util/obj_io.gd")
+const StrokesUsd := preload("res://util/strokes_usd.gd")
 
 signal state_changed(state: String, record: Dictionary)
 signal body_ready(v: PackedFloat32Array, f: PackedInt32Array)
@@ -52,6 +53,7 @@ var infer = null
 var curvenet = null
 var fit = null
 var drape = null
+var usd = null # stages/usd_stage.gd: strokes_from and saving strokes
 
 var opts := {}
 var state := "IDLE"
@@ -68,6 +70,7 @@ var _frames := 0
 var _run_t0 := 0
 var _first := true
 var _stroke_ids := {}
+var _authored_of := {} # pen stroke index -> data.authored index (the strokes as drawn, for saving)
 var _note := ""
 
 const DEFAULTS := {
@@ -112,6 +115,8 @@ const DEFAULTS := {
 	"fit_mode": "avbd",       # avbd (default): drape.elf's fit phase with drape_stage.gd's FIT_AVBD (Cut 6d,
 	                          # gates/6d-fit-avbd, 13 s), CHECK by fit.elf | polyfem: fit.elf (cloth-fit, 627 s)
 	"stop_after": "",         # "MESH" for --gate=pen
+	"strokes_from": "",       # a .usda of saved strokes (util/strokes_usd.gd, via usd.elf): replaces the
+	                          # scripted source; its customLayerData rides along as data.strokes_from.meta
 }
 
 func setup(stages: Dictionary) -> void:
@@ -119,6 +124,7 @@ func setup(stages: Dictionary) -> void:
 	curvenet = stages.get("curvenet")
 	fit = stages.get("fit")
 	drape = stages.get("drape")
+	usd = stages.get("usd")
 
 # --- control ---------------------------------------------------------------------------
 
@@ -350,24 +356,37 @@ func _author(first: bool) -> void:
 			data.counts = {"fixture": true}
 			_goto("MESH", g.source)
 			return
-		var src := PenSource.make(data.body_v, data.joints, {"drop_seam": opts.drop_seam, "closed_rings": opts.closed_rings,
-				"no_boundary": opts.no_boundary})
-		if src.error != "":
-			_fail("pen source: " + src.error)
-			return
-		data.rings = {"waist": _ring_text(src.waist), "hem": _ring_text(src.hem)}
-		data.min_clearance = "%.4f m after growing both rings by %.4f m (the rings alone: %.4f m)" % [src.min_clearance,
-				src.grow, src.clearance_before_grow]
-		data.expected = src.expected
-		strokes_ready.emit(src.strokes)
+		var events := []
+		if str(opts.strokes_from) != "":
+			var saved: Dictionary = StrokesUsd.from_file(usd, opts.strokes_from) if usd != null else {"error": "no usd stage"}
+			if saved.has("error"):
+				_fail("strokes_from %s: %s" % [opts.strokes_from, saved.error])
+				return
+			data.strokes_from = {"path": opts.strokes_from, "strokes": saved.strokes.size(), "meta": saved.meta}
+			events = StrokesUsd.events(saved.strokes)
+			strokes_ready.emit(saved.strokes)
+		else:
+			var src := PenSource.make(data.body_v, data.joints, {"drop_seam": opts.drop_seam,
+					"closed_rings": opts.closed_rings, "no_boundary": opts.no_boundary})
+			if src.error != "":
+				_fail("pen source: " + src.error)
+				return
+			data.rings = {"waist": _ring_text(src.waist), "hem": _ring_text(src.hem)}
+			data.min_clearance = "%.4f m after growing both rings by %.4f m (the rings alone: %.4f m)" % [
+					src.min_clearance, src.grow, src.clearance_before_grow]
+			data.expected = src.expected
+			events = src.events
+			strokes_ready.emit(src.strokes)
 		var r0: String = curvenet.reset()
 		var r1: String = curvenet.set_body(data.body_v, data.body_f)
 		if r0.begins_with("FAIL") or r1.begins_with("FAIL"):
 			_fail("curvenet setup: %s | %s" % [r0, r1])
 			return
 		data.pen_ends = []
+		data.authored = []
+		_authored_of = {}
 		if opts.pen == "scripted" and not pen_external:
-			pen_queue = src.events.duplicate()
+			pen_queue = events.duplicate()
 			pen_finished = true
 		elif opts.pen == "scripted":
 			pass # the bridge replays the same source, with its visuals
@@ -387,8 +406,13 @@ func _author(first: bool) -> void:
 					_fail("pen_begin refused stroke %d at %s" % [e.stroke, str(e.pos)])
 					return
 				_stroke_ids[e.stroke] = id
+				_authored_of[e.stroke] = data.authored.size()
+				data.authored.append({"name": "stroke_%03d" % data.authored.size(), "boundary": bool(e.get("boundary", false)),
+						"points": PackedVector3Array([e.pos])})
 			"point":
 				curvenet.pen_point_at(_stroke_ids.get(e.stroke, -1), e.pos, e.pressure)
+				if _authored_of.has(e.stroke):
+					data.authored[_authored_of[e.stroke]].points.append(e.pos)
 			"end":
 				var r: String = curvenet.pen_end_raw(_stroke_ids.get(e.stroke, -1))
 				data.pen_ends.append(r)

@@ -36,6 +36,7 @@ var _frames := 0
 var _strokes: Array = []
 var _plan_path := ""
 var _calib_frames := 0
+var _strokes_file := ""
 
 func _say(s: String) -> void:
 	print(s)
@@ -66,7 +67,8 @@ func _initialize() -> void:
 		return
 	_main = ps.instantiate()
 	root.add_child(_main)
-	_phase = "wait"
+	_strokes_file = _arg("strokes")
+	_phase = "replay_wait" if _strokes_file != "" else "wait"
 
 func _process(_dt: float) -> bool:
 	_frames += 1
@@ -77,6 +79,23 @@ func _process(_dt: float) -> bool:
 				_main.dress_on_status() if _main != null and _main.get("pipeline") != null else "-"])
 		return false
 	match _phase:
+		"replay_wait":
+			# Saved-stroke replay: no XR, no OXRSys hand. The pipeline reads the
+			# strokes straight from the .usda (strokes_from) and feeds curvenet,
+			# so the run is deterministic and needs no simulator.
+			if _frames < 5:
+				return false
+			_main.pipeline.state_changed.connect(func(st: String, _rec: Dictionary): _say("STATE " + st))
+			var rr: String = _main.dress_on_run_opts({"strokes_from": _strokes_file, "allow_fixture": "infer,rig", "stop_after": "MESH"})
+			_say("replay %s: %s" % [_strokes_file.get_file(), rr])
+			if not rr.begins_with("STARTED"):
+				_finish("FAIL (replay did not start: %s)" % rr)
+				return false
+			_phase = "replay_run"
+		"replay_run":
+			var stt: String = _main.pipeline.state
+			if stt == "DONE" or stt == "FAILED":
+				_evaluate_file()
 		"wait":
 			if _frames < 5:
 				return false
@@ -137,6 +156,23 @@ func _evaluate() -> void:
 	_say("pen: strokes %d (plan %d) cycles %d openings %d, state %s, bridge strokes_sent %d" % [strokes, _strokes.size(),
 			cycles, openings, p.state, int(_main.get_node("World/PenBridge").strokes_sent) if _main.has_node("World/PenBridge") else -1])
 	var ok := strokes == _strokes.size() and cycles == FULL_SKIRT_CYCLES and openings == 2
+	_finish("PASS" if ok else "FAIL")
+
+func _evaluate_file() -> void:
+	var p = _main.pipeline
+	var c: Dictionary = p.data.get("counts", {})
+	var strokes := int(c.get("strokes", -1))
+	var cycles := int(c.get("cycles", -1))
+	var openings := int(c.get("openings", -1))
+	var sf: Dictionary = p.data.get("strokes_from", {})
+	var planned := int(sf.get("strokes", -1))
+	var exp: Dictionary = sf.get("meta", {}).get("expected", {})
+	var want_cycles := int(exp.get("cycles", FULL_SKIRT_CYCLES))
+	var want_openings := int(exp.get("openings", 2))
+	var src := "meta.expected" if not exp.is_empty() else "fallback %d/%d" % [FULL_SKIRT_CYCLES, 2]
+	_say("replay: strokes %d (planned %d) cycles %d (want %d) openings %d (want %d), state %s, expected from %s" % [
+			strokes, planned, cycles, want_cycles, openings, want_openings, p.state, src])
+	var ok: bool = p.state == "DONE" and strokes == planned and cycles == want_cycles and openings == want_openings
 	_finish("PASS" if ok else "FAIL")
 
 func _finish(verdict: String) -> void:
